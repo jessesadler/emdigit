@@ -22,17 +22,17 @@ txt_data <- txt_data[!no_type]
 types <- purrr::map_chr(txt_data, ~ attributes(.)$type)
 names(txt_data) <- types
 
-# Flatten to vectors within the lists
-txt_data <- map(txt_data, flatten_chr)
-
 
 # Clean list data ---------------------------------------------------------
 
-# 1. Remove empty data: where there is a type but only an empty character string
+# 1. Flatten to vectors within the lists
+txt_data <- map(txt_data, flatten_chr)
+
+# 2. Remove empty data: where there is a type but only an empty character string
 no_data <- map_lgl(txt_data, ~ identical(., character(0)))
 txt_data <- txt_data[!no_data]
 
-# 2. Remove extra page 157
+# 3. Remove extra page 157
 # Index for 157
 pg_157_pos <- names(txt_data) == "page-number" & map_chr(txt_data, str_flatten) == "157"
 pg_157 <- which(pg_157_pos == TRUE)
@@ -40,7 +40,8 @@ pg_157_vct <- seq(from = pg_157[[1]], to = pg_157[[2]] - 1)
 
 txt_data <- txt_data[-pg_157_vct]
 
-# 3. Unknown types
+# 4. Unknown types
+
 # Create vector of names
 type_names <- names(txt_data)
 # Where are types/names empty
@@ -57,7 +58,7 @@ unknown_type_names <- c("route-heading", "locations", "locations", "catch-word",
                         "route-heading", "", "catch-word", "route-heading",
                         "route-heading", "route-heading")
 
- # Update names vector then names in list
+# Update names vector then names in list
 type_names[unknown_type_vct] <- unknown_type_names
 
 names(txt_data) <- type_names
@@ -92,6 +93,12 @@ tbl <- tibble(type = names(txt_data),
        data = txt_data) %>%
   rowid_to_column("id")
 
+# Save full data
+# tbl %>%
+#   mutate(data = map(data, str_flatten)) %>%
+#   unnest(data) %>%
+#   mutate(data = str_squish(data)) %>%
+#   write_csv("data/full-data.csv")
 
 # Route headings tbl ------------------------------------------------------
 
@@ -105,6 +112,9 @@ tbl_routes <- tbl %>%
          data = str_remove_all(data, "- "))
 
 unique(word(tbl_routes$data, 1))
+
+# Save route data
+# write_csv(tbl_routes, "data/route-heading.csv")
 
 # Distances tbl -----------------------------------------------------------
 
@@ -127,6 +137,9 @@ tbl_distances_sum <- tbl_distances %>%
   summarise(total_distance = sum(distance, na.rm = TRUE),
             nr_of_locs = n())
 
+# Which routes do not have distances
+which(1:max(cumsum(route_headings_pos)) %in% tbl_distances_sum$route == FALSE)
+
 
 # Sum distance tbl --------------------------------------------------------
 
@@ -139,7 +152,7 @@ tbl_sum_distance <- tbl %>%
 str_sort(unique(tbl_sum_distance$data))
 
 # Which routes are missing sum-distance
-num_of_routes <- 1:nrow(tbl_routes)
+num_of_routes <- 1:max(cumsum(route_headings_pos))
 sum_distance <- num_of_routes %in% unique(tbl_sum_distance$route)
 num_of_routes[!sum_distance]
 
