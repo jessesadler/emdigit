@@ -25,32 +25,72 @@ names(txt_data) <- types
 # Flatten to vectors within the lists
 txt_data <- map(txt_data, flatten_chr)
 
-# Remove empty data: where there is a type but only an empty character string
+
+# Clean list data ---------------------------------------------------------
+
+# 1. Remove empty data: where there is a type but only an empty character string
 no_data <- map_lgl(txt_data, ~ identical(., character(0)))
 txt_data <- txt_data[!no_data]
 
+# 2. Remove extra page 157
+# Index for 157
+pg_157_pos <- names(txt_data) == "page-number" & map_chr(txt_data, str_flatten) == "157"
+pg_157 <- which(pg_157_pos == TRUE)
+pg_157_vct <- seq(from = pg_157[[1]], to = pg_157[[2]] - 1)
+
+txt_data <- txt_data[-pg_157_vct]
+
+# 3. Unknown types
+# Create vector of names
+type_names <- names(txt_data)
+# Where are types/names empty
+unknown_type_pos <- type_names == ""
+# Look at data for empty names
+unknown_type <- txt_data[unknown_type_pos]
+# Index of empty names
+unknown_type_vct <- which(unknown_type_pos == TRUE)
+
+# Manually correct missing types
+unknown_type_names <- c("route-heading", "locations", "locations", "catch-word",
+                        "catch-word", "catch-word", "route-heading", "catch-word",
+                        "catch-word", "catch-word", "route-heading", "distances",
+                        "route-heading", "", "catch-word", "route-heading",
+                        "route-heading", "route-heading")
+
+ # Update names vector then names in list
+type_names[unknown_type_vct] <- unknown_type_names
+
+names(txt_data) <- type_names
+# Check
+sum(names(txt_data) == "")
+
+
+# Build tibble ------------------------------------------------------------
+
 # Route headings
 route_headings_pos <- names(txt_data) == "route-heading"
+
+# Image and page numbers
+# Use images because they are more consistant than page number
 
 # First page number
 first_pg <- txt_data[names(txt_data) == "page-number"][[1]] %>%
   as.numeric()
 
+# Find images
+img <- cumsum(no_type)[!no_type][!no_data][-pg_157_vct]
+
+# Number pages, use if_else to deal with pg 157 appearing twice
+pg <- if_else(img + first_pg - 1 < 157,
+              img + first_pg - 1,
+              img + first_pg - 2)
+
 tbl <- tibble(type = names(txt_data),
        route = cumsum(route_headings_pos),
-       img = cumsum(no_type)[!no_type][!no_data],
-       page = img + first_pg - 1,
+       img = img,
+       page = pg,
        data = txt_data) %>%
   rowid_to_column("id")
-
-# Unknown types
-unknown_type_pos <- names(txt_data) == ""
-unknown_type <- txt_data[unknown_type_pos]
-
-tbl %>%
-  filter(type == "") %>%
-  mutate(data = map_chr(data, str_flatten),
-         data = str_squish(data))
 
 
 # Route headings tbl ------------------------------------------------------
