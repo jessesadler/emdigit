@@ -85,6 +85,7 @@ raw_distances <- map(distances, str_squish)
 
 raw_distances %>%
   map(~ str_replace_all(., "I", "1")) %>% # Replace capital I with 1
+  map(~ str_replace_all(., "i", "1")) %>% # Replace lowercase i with 1
   map(~ str_replace_all(., "[^0-9]", "")) %>% # Remove non-numeric values
   map(as.numeric) %>%
   map(~ discard(., is.na))
