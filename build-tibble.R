@@ -3,9 +3,11 @@
 library(tidyverse)
 library(xml2)
 
+# Build full data and Route headings data
+
 # Import data -------------------------------------------------------------
 
-data_xml <- read_xml("1623__Codogno__Compendio_TR_and_Lines.xml")
+data_xml <- read_xml("data-raw/1623__Codogno__Compendio_TR_and_Lines.xml")
 data_list <- xml2::as_list(data_xml)
 txt_data <- data_list[[1]][[3]][[1]][[1]]
 
@@ -72,7 +74,7 @@ sum(names(txt_data) == "")
 route_headings_pos <- names(txt_data) == "route-heading"
 
 # Image and page numbers
-# Use images because they are more consistant than page number
+# Use images because they are more consistent than page number
 
 # First page number
 first_pg <- txt_data[names(txt_data) == "page-number"][[1]] %>%

@@ -3,9 +3,11 @@
 library(tidyverse)
 library(xml2)
 
+# This script shows different ways of cleaning the xml data from transkribus.
+
 # Import data -------------------------------------------------------------
 
-data_xml <- read_xml("1623__Codogno__Compendio_TR_and_Lines.xml")
+data_xml <- read_xml("data-raw/1623__Codogno__Compendio_TR_and_Lines.xml")
 data_list <- xml2::as_list(data_xml)
 txt_data <- data_list[[1]][[3]][[1]][[1]]
 
