@@ -17,10 +17,82 @@ str(x_list, max.level = 2)
 # TEI Header data
 str(x_list[[1]][[1]])
 
-# Facsimile data
+
+# Points data -------------------------------------------------------------
+
+# Each item on the list is one page of the scan
+length(x_list[[1]][[2]])
+
+# Structure of first page
 str(x_list[[1]][[2]][[1]], max.level = 1)
 
-# Text data
+pts_data <- x_list[[1]][[2]]
+
+attributes(pts_data[[1]][[5]])
+# Attributes
+# 1. $names: zone
+# 2. $points
+# 3. $rendition: TextRegion
+# 4. $id
+# 5. $subtype
+
+# Flatten page data to get list of length 1728
+pts_data_flat <- flatten(pts_data)
+
+# Work with first page to build tibble
+
+# pg1 data and remove empty $graphic list
+pg1 <- compact(pts_data[[1]])
+
+ids <- map_chr(pg1, ~ attributes(.)$id)
+
+types <- map_chr(pg1, ~ attributes(.)$subtype)
+
+pts <- map_chr(pg1, ~ attributes(.)$points)
+
+tbl <- tibble(id = ids,
+              type = types,
+              pts = pts)
+
+tbl_tidy <- tbl %>%
+  separate_rows(pts, sep = " ") %>%
+  separate(pts, c("x", "y"), convert = TRUE) %>%
+  mutate(y = -y)
+
+ggplot(tbl_tidy) +
+  geom_point(aes(x = x, y = y, color = id))
+
+# Make polygons with sf
+tbl_sf <- sf::st_as_sf(tbl_tidy, coords = c("x", "y")) %>%
+  group_by(id) %>%
+  summarise() %>%
+  sf::st_convex_hull() %>%
+  left_join(select(tbl, id, type), by = "id")
+
+ggplot(tbl_sf) +
+  geom_sf(aes(color = type, fill = type), alpha = 0.4) +
+  geom_sf_text(aes(label = id)) +
+  theme_void()
+
+# Which pages have problems identifying subtypes
+
+subtype_list <- vector("list", length(pts_data))
+
+for (i in seq_along(pts_data)) {
+  subtype_list[[i]] <- map(pts_data[[i]], ~ attributes(.)$subtype)
+  subtype_list[[i]] <- subtype_list[[i]][-1]
+}
+
+any_nulls <- vector("list", length(subtype_list))
+
+for (i in seq_along(subtype_list)) {
+  any_nulls[[i]] <- any(map_lgl(subtype_list[[i]], is.null))
+}
+
+which(flatten_lgl(any_nulls))
+
+# Text data ---------------------------------------------------------------
+
 # List of list of length 1728
 length(x_list[[1]][[3]][[1]][[1]])
 
