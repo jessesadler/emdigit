@@ -76,12 +76,12 @@ route_headings_pos <- names(txt_data) == "route-heading"
 # Image and page numbers
 # Use images because they are more consistent than page number
 
+# Find images
+img <- cumsum(no_type)[!no_type][!no_data][-pg_157_vct]
+
 # First page number
 first_pg <- txt_data[names(txt_data) == "page-number"][[1]] %>%
   as.numeric()
-
-# Find images
-img <- cumsum(no_type)[!no_type][!no_data][-pg_157_vct]
 
 # Number pages, use if_else to deal with pg 157 appearing twice
 pg <- if_else(img + first_pg - 1 < 157,
