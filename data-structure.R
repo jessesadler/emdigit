@@ -3,41 +3,56 @@
 library(tidyverse)
 library(xml2)
 
-
 # Import data -------------------------------------------------------------
 
-x <- read_xml("data-raw/1623__Codogno__Compendio_TR_and_Lines.xml")
-x_list <- xml2::as_list(x)
+data_list <- read_xml("data-raw/1623__Codogno__Compendio_TR_and_Lines.xml") %>%
+  xml2::as_list()
 
 # Look at the structure of the list ---------------------------------------
 
 # Overall structure: List of three lists
-str(x_list, max.level = 2)
+str(data_list, max.level = 2)
 
-# TEI Header data
-str(x_list[[1]][[1]])
+# 1. TEI Header data: list of 1
+# 2. Points data: list of 100 (pages)
+# 3. Text data: list of 1
+
+# First level: TEI Header data --------------------------------------------
+
+str(data_list[[1]][[1]])
 
 
-# Points data -------------------------------------------------------------
+# Second level: Points data ------------------------------------------------
 
 # Each item on the list is one page of the scan
-length(x_list[[1]][[2]])
+length(data_list[[1]][[2]])
 
 # Structure of first page
-str(x_list[[1]][[2]][[1]], max.level = 1)
+str(data_list[[1]][[2]][[1]], max.level = 1)
 
-pts_data <- x_list[[1]][[2]]
+# First element of each list is empty list with page id
+data_list[[1]][[2]][[1]][[1]]
+
+pts_data <- data_list[[1]][[2]]
 
 attributes(pts_data[[1]][[5]])
 # Attributes
-# 1. $names: zone
-# 2. $points
+# 1. $names: (zone) Number of zones or lines
+# 2. $points: Bounding box of points
 # 3. $rendition: TextRegion
 # 4. $id
 # 5. $subtype
 
-# Flatten page data to get list of length 1728
-pts_data_flat <- flatten(pts_data)
+# Length of each element is the number of lines/zones
+length(pts_data[[1]][[5]])
+
+# Each zone/line has its own id (suffix of l1) and set of points data
+pts_data[[1]][[5]][[1]]
+
+# Flatten page data and remove page id elements to get list of length 1628
+pts_data_flat <- pts_data %>%
+  flatten() %>%
+  compact()
 
 # Work with first page to build tibble
 
@@ -91,79 +106,82 @@ for (i in seq_along(subtype_list)) {
 
 which(flatten_lgl(any_nulls))
 
-# Text data ---------------------------------------------------------------
+# Third level: Text data ---------------------------------------------------
 
-# List of list of length 1728
-length(x_list[[1]][[3]][[1]][[1]])
+# List of list of length 1728: Number of elements plus image ids
+length(data_list[[1]][[3]][[1]][[1]])
 
 # One item from the list
-str(x_list[[1]][[3]][[1]][[1]][[1]])
-x_list[[1]][[3]][[1]][[1]][[1]]
+str(data_list[[1]][[3]][[1]][[1]][[1]])
+data_list[[1]][[3]][[1]][[1]][[1]]
 
 
 # Breaking down text data -------------------------------------------------
 
 # id: image number
-x_list[[1]][[3]][[1]][[1]][[1]]
-attributes(x_list[[1]][[3]][[1]][[1]][[1]])
+# Empty list with facs, n, and id attributes
+# This is the best way to identify images/pages from the data
+data_list[[1]][[3]][[1]][[1]][[1]]
+attributes(data_list[[1]][[3]][[1]][[1]][[1]])
 
 # type: page-number
-x_list[[1]][[3]][[1]][[1]][[2]]
+data_list[[1]][[3]][[1]][[1]][[2]]
 # List of length 2
-length(x_list[[1]][[3]][[1]][[1]][[2]])
+length(data_list[[1]][[3]][[1]][[1]][[2]])
 
 # The list itself has a name: "ab": note the single bracket at the end
-names(x_list[[1]][[3]][[1]][[1]][2])
+names(data_list[[1]][[3]][[1]][[1]][2])
 
 # The list has name (names of the items of the list), "facs", and "type" attributes
-# It is the "type" attribute that has the TEI encoding
-attributes(x_list[[1]][[3]][[1]][[1]][[2]])
+# It is the "type" attribute that has the TEI encoding.
+# facs is the transkribus id.
+attributes(data_list[[1]][[3]][[1]][[1]][[2]])
 
 # Access type attribute data
-attributes(x_list[[1]][[3]][[1]][[1]][[2]])$type
+attributes(data_list[[1]][[3]][[1]][[1]][[2]])$type
 
 # First item is empty list with name "lb" with "facs" and "n" attributes
-x_list[[1]][[3]][[1]][[1]][[2]][[1]]
+data_list[[1]][[3]][[1]][[1]][[2]][[1]]
 # Second item is actual data of character vector with no attributes
-x_list[[1]][[3]][[1]][[1]][[2]][[2]]
+data_list[[1]][[3]][[1]][[1]][[2]][[2]]
 
 # type: header
 # Same structure as above
-x_list[[1]][[3]][[1]][[1]][[3]]
+data_list[[1]][[3]][[1]][[1]][[3]]
 
 # route-heading
-x_list[[1]][[3]][[1]][[1]][[4]]
-length(x_list[[1]][[3]][[1]][[1]][[4]])
-attributes(x_list[[1]][[3]][[1]][[1]][[4]])
+data_list[[1]][[3]][[1]][[1]][[4]]
+length(data_list[[1]][[3]][[1]][[1]][[4]])
+attributes(data_list[[1]][[3]][[1]][[1]][[4]])
 
 # Each line of text has one empty list with attributes of "facs" and "n"
 # and then a character vector of the data
-x_list[[1]][[3]][[1]][[1]][[4]][[1]]
-x_list[[1]][[3]][[1]][[1]][[4]][[2]]
+data_list[[1]][[3]][[1]][[1]][[4]][[1]]
+data_list[[1]][[3]][[1]][[1]][[4]][[2]]
 
 # type: locations
 # Same basic structure as above
 # Number of lines x2, but can be multiple lines for each location
-x_list[[1]][[3]][[1]][[1]][[5]]
-length(x_list[[1]][[3]][[1]][[1]][[5]])
+data_list[[1]][[3]][[1]][[1]][[5]]
+length(data_list[[1]][[3]][[1]][[1]][[5]])
 
 # type: distances
 # Same basic structure as above
 # Length / 2 should equal number of locations,
 # unless there is a partial location after last distance
-x_list[[1]][[3]][[1]][[1]][[6]]
+data_list[[1]][[3]][[1]][[1]][[6]]
 
 # type: sum-distance
-x_list[[1]][[3]][[1]][[1]][[9]]
+data_list[[1]][[3]][[1]][[1]][[9]]
 
 # type: catch-word
-x_list[[1]][[3]][[1]][[1]][[13]]
+data_list[[1]][[3]][[1]][[1]][[13]]
 
 
 # Attributes to names -----------------------------------------------------
 
 # Example with one piece of data
-route <- x_list[[1]][[3]][[1]][[1]][[4]]
+route <- data_list[[1]][[3]][[1]][[1]][[4]]
 
 type <- attributes(route)$type
 
@@ -175,7 +193,7 @@ names(route_list) <- type
 
 
 # Multiple pieces of data
-y <- x_list[[1]][[3]][[1]][[1]][1:20]
+y <- data_list[[1]][[3]][[1]][[1]][1:20]
 
 # names
 names(y)
@@ -200,6 +218,6 @@ data <- map(y, flatten_chr)
 
 # All data ----------------------------------------------------------------
 
-txt_data <- x_list[[1]][[3]][[1]][[1]]
+txt_data <- data_list[[1]][[3]][[1]][[1]]
 
 unique(names(txt_data))
