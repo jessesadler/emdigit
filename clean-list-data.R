@@ -16,7 +16,7 @@ txt_data <- data_list[[1]][[3]][[1]][[1]]
 
 # Remove where type is null: Page id
 no_type <- txt_data %>%
-  purrr::map(~ attributes(.)$type) %>%
+  map(~ attributes(.)$type) %>%
   map_lgl(is.null)
 
 txt_data <- txt_data[!no_type]
