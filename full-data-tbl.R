@@ -76,7 +76,8 @@ tbl_elements <- tibble(id = seq_along(img),
 
 # 1. Text of lines
 line_txt <- txt_data %>%
-  map(flatten_chr)
+  map(flatten_chr) %>%
+  map(str_squish)
 
 # 2. Line numbers
 line_nr <- map(line_txt, seq_along)
@@ -102,36 +103,3 @@ tbl_lines %>%
   nest(data = c(id, line_nr, data)) %>%
   unnest(data) %>%
   select(id, trans_id, img, type, line_nr, data, pts)
-
-# Problems with line id and points data -----------------------------------
-
-# Not all line ids or points data have text data
-# This makes it problematic to include them in line tibble.
-
-# Line id
-line_id <- txt_data %>%
-  map( ~ map(., ~ attributes(.)$facs)) %>%
-  map(compact) %>%
-  map(flatten_chr) %>%
-  map(~ str_remove(., "#"))
-
-# Line points data
-line_pts <- pts_data %>%
-  map( ~ map(., ~ attributes(.)$points)) %>%
-  map(compact)
-
-length(flatten(line_txt))
-length(flatten(line_nr))
-length(flatten(line_id))
-length(flatten(line_pts))
-
-line_id_lengths <- set_names(map_int(line_id, length), NULL)
-line_nr_lengths <- set_names(map_int(line_nr, length), NULL)
-line_txt_lengths <- set_names(map_int(line_txt, length), NULL)
-line_pts_lengths <- set_names(map_int(line_pts, length), NULL)
-
-which(line_nr_lengths != line_txt_lengths)
-which(map_dbl(txt_data, ~ length(.) %% 2) == 1)
-map_dbl(txt_data[which(map_dbl(txt_data, ~ length(.) %% 2) == 1)], length)
-
-length(compact(flatten(line_pts)))

@@ -7,12 +7,13 @@ library(xml2)
 
 # Import data -------------------------------------------------------------
 
-data_xml <- read_xml("data-raw/1623__Codogno__Compendio_TR_and_Lines.xml")
-data_list <- xml2::as_list(data_xml)
-txt_data <- data_list[[1]][[3]][[1]][[1]]
+data_list <- read_xml("data-raw/1623__Codogno__Compendio_TR_and_Lines.xml") %>%
+  xml2::as_list()
+txt_data <- data_list[[1]][[3]][[1]][[1]] %>%
+  set_names(NULL) # Remove names on lists: They are not necessary
 
 
-# Types as names ----------------------------------------------------------
+# Remove scan id ----------------------------------------------------------
 
 # Remove where type is null: Page id
 no_type <- txt_data %>%
@@ -21,21 +22,37 @@ no_type <- txt_data %>%
 
 txt_data <- txt_data[!no_type]
 
-# Get types and use as names
-types <- purrr::map_chr(txt_data, ~ attributes(.)$type)
-names(txt_data) <- types
+# Types of data -----------------------------------------------------------
 
-# Flatten to vectors within the lists
-txt_data <- map(txt_data, flatten_chr)
+type <- map_chr(txt_data, ~ attributes(.)$type)
 
+
+# Line text data ----------------------------------------------------------
+
+# Flatten to character vectors within the lists
+# Each element within the lists is a line
+# This gets rid of all attributes
+
+line_txt <- map(txt_data, flatten_chr)
+
+
+# Element text ------------------------------------------------------------
+
+# Further flatten line text into single string for each element/type
+elmnt_txt <- txt_data %>%
+  map(flatten_chr) %>%
+  map(str_flatten)
 
 # Route headings ----------------------------------------------------------
 
 ## Single heading ##
 route_heading <- txt_data[3]
 
+# Flatten into character vector of each line
+route_heaing_chr <- map(route_heading, flatten_chr)
+
 # Flatten into single string
-route_heading_flat <- map(route_heading, str_flatten)
+route_heading_flat <- map(route_heaing_chr, str_flatten)
 
 # Remove white space and return character
 route_heading_squish <- map(route_heading_flat, str_squish)
@@ -45,11 +62,12 @@ map(route_heading_squish, ~ str_remove(., "\\."))
 
 
 ## All route headings ##
-route_headings_pos <- names(txt_data) == "route-heading"
+route_headings_pos <- type == "route-heading"
 
 route_headings_list <- txt_data[route_headings_pos]
 
 route_headings_vct <- route_headings_list %>%
+  map(flatten_chr) %>%
   map(str_flatten) %>%
   map(str_squish) %>%
   map(~ str_remove_all(., "\\.")) %>% # get rid of period
@@ -65,10 +83,11 @@ tibble(route = route_headings_vct) %>%
 
 # Transkribus does not reliably find pages as seen below
 # It only finds 90 out of 100 pages
-pages_pos <- names(txt_data) == "page-number"
+pages_pos <- type == "page-number"
 pages <- txt_data[pages_pos] %>%
-  flatten_chr() %>%
-  as.numeric()
+  map(flatten_chr) %>%
+  map(as.numeric) %>%
+  flatten_dbl()
 
 # Remove NA created by heading interpreted as page number
 pages <- pages[!is.na(pages)]
@@ -79,11 +98,13 @@ cumsum(no_type)[!no_type]
 
 # Distances ---------------------------------------------------------------
 
-distances_pos <- names(txt_data) == "distances"
+distances_pos <- type == "distances"
 distances <- txt_data[distances_pos]
 
-# remove white space
-raw_distances <- map(distances, str_squish)
+# Character vector and remove white space
+raw_distances <- distances %>%
+  map(flatten_chr) %>%
+  map(str_squish)
 
 raw_distances %>%
   map(~ str_replace_all(., "I", "1")) %>% # Replace capital I with 1
@@ -94,28 +115,53 @@ raw_distances %>%
 
 # Sum distance ------------------------------------------------------------
 
-sum_distances_pos <- names(txt_data) == "sum-distance"
+sum_distances_pos <- type == "sum-distance"
 sum_distances <- txt_data[sum_distances_pos]
 
 sum_distances %>%
+  map(flatten_chr) %>%
   map(~ str_replace_all(., "[^0-9]", "")) %>% # Remove non-numeric values
   map(as.numeric) %>%
   flatten_dbl()
 
 # Header ------------------------------------------------------------------
 
-headers_pos <- names(txt_data) == "header"
+headers_pos <- type == "header"
 headers <- txt_data[headers_pos] %>%
-  flatten_chr()
+  map(flatten_chr) %>%
+  compact() %>%
+  map_chr(1L) %>% # Only take first element of the vector
+  str_squish()
 
 # Locations ---------------------------------------------------------------
 
-locations <- txt_data[[4]]
+locations <- flatten_chr(txt_data[[15]]) %>%
+  str_squish()
 
 locations
+
+# Get rid of hyphen, attach next element, and then delete that element
+hyphens <- which(str_detect(locations, "¬"))
+replacements <- str_replace(locations[hyphens], "¬", locations[hyphens + 1])
+
+locations2 <- locations
+locations2[hyphens] <- replacements
+locations2 <- locations2[-c(hyphens + 1)]
+
+# Lines with few characters should be added to previous element without a space
+short_lines <- which(str_length(locations2) < 6)
+
+replacements <- str_c(locations2[short_lines - 1], locations2[short_lines])
+locations2[short_lines - 1] <- replacements
+locations2 <- locations2[-short_lines]
+
+
+# Find which lines start in common ways
+which(str_detect(locations2, "^a |^Si |^Pass"))
+
+# Combine and then split
 x <- locations %>%
   str_flatten() %>%
-  str_squish() %>%
   str_remove_all(., "¬ ")
 
 str_split(x, " a ") %>%
@@ -130,4 +176,31 @@ heading_ids <- cumsum(route_headings_pos)
 # Associate route headings with data through attributes
 
 
+# Transkribus ids ---------------------------------------------------------
 
+trans_id <- map_chr(txt_data, ~ attributes(.)$facs) %>%
+  str_remove("#") # Remove "#" at beginning of each id
+
+# Transcribus line ids
+line_id <- txt_data %>%
+  map( ~ map(., ~ attributes(.)$facs)) %>%
+  map(compact) %>%
+  map(flatten_chr) %>%
+  map(~ str_remove(., "#"))
+
+# There are issues with line ids. Not every line id has text, so the number
+# of line ids and line text are not equal. This makes this data difficult
+# to work with.
+
+length(flatten(line_txt))
+length(flatten(line_id))
+
+# Which ones are not equivalent
+not_equal <- which(map_int(line_txt, length) != map_int(line_id, length))
+# Where text data is not even length is the same
+which(map_dbl(txt_data, ~ length(.) %% 2) == 1)
+
+# Lengths of these lists
+
+map_dbl(line_txt[not_equal], length)
+map_dbl(line_id[not_equal], length)
