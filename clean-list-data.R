@@ -40,6 +40,7 @@ sum(no_text)
 
 txt_data <- txt_data[!no_text]
 
+
 # Types of data -----------------------------------------------------------
 
 type <- map_chr(txt_data, ~ attributes(.)$type)
@@ -61,8 +62,42 @@ map(txt_data, flatten_chr)[missing_type] %>%
 # Each element within the lists is a line
 # This gets rid of all attributes
 
-line_txt <- map(txt_data, flatten_chr)
+line_txt <- txt_data %>%
+  map(flatten_chr) %>%
+  map(str_squish)
 
+# Lines that have no text data: Much easier to do after using flatten_chr()
+
+# There are a few lines that the only text data is a return: "\n      "
+# Using str_squish() above turns "\n" into ""
+no_line_txt <- map(line_txt, ~ . == "")
+
+# How many lines have no text
+flatten_lgl(no_line_txt) %>% sum()
+
+# Which elements have lines with no text
+which(map_lgl(no_line_txt, any))
+
+# See these lines
+line_txt[which(map_lgl(no_line_txt, any))]
+
+# Number of lines now
+line_txt %>%
+  map_int(length) %>%
+  sum()
+
+# For loop to subset
+for (i in seq_along(line_txt)) {
+  line_txt[[i]] <- line_txt[[i]][!no_line_txt[[i]]]
+}
+
+# After removing lines with no text
+line_txt %>%
+  map_int(length) %>%
+  sum()
+
+# Look at lines now
+line_txt[which(map_lgl(no_line_txt, any))]
 
 # Element text ------------------------------------------------------------
 
@@ -225,7 +260,7 @@ length(flatten(line_id))
 
 # Which ones are not equivalent
 not_equal <- which(map_int(line_txt, length) != map_int(line_id, length))
-# Where text data is not even length is the same
+# Where text data is not even length or where lines were removed
 which(map_dbl(txt_data, ~ length(.) %% 2) == 1)
 
 # Lengths of these lists
