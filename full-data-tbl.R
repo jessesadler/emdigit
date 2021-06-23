@@ -13,7 +13,8 @@ data_list <- read_xml("data-raw/1623__Codogno__Compendio_TR_and_Lines.xml") %>%
 
 
 # Text data
-txt_data <- data_list[[1]][[3]][[1]][[1]]
+txt_data <- data_list[[1]][[3]][[1]][[1]] %>%
+  set_names(NULL)
 
 # Remove where type is null: Page id
 no_type <- txt_data %>%
@@ -22,20 +23,26 @@ no_type <- txt_data %>%
 
 txt_data <- txt_data[!no_type]
 
+# Remove where there is no text data
+no_text <- map_int(txt_data, length) == 0 | map_int(txt_data, length) == 1
+
+txt_data <- txt_data[!no_text]
 
 # Points data
-
 pts_data <- data_list[[1]][[2]] %>%
   flatten() %>% # Remove first level of list: pages
-  compact() # Remove page id items
+  compact() %>% # Remove page id items
+  set_names(NULL)
 
+# Remove where there is no text data
+pts_data <- pts_data[!no_text]
 
 # Build elements tibble ----------------------------------------------------
 
 # Each row is an element
 
-# 1. Image numbers: cumsum of no_type without no_type
-img <- cumsum(no_type)[!no_type]
+# 1. Image numbers: cumsum of no_type without no_type and no_text
+img <- cumsum(no_type)[!no_type][!no_text]
 
 # 2. Transkribus id
 trans_id <- purrr::map_chr(txt_data, ~ attributes(.)$facs) %>%
@@ -58,7 +65,6 @@ elmnt_txt <- txt_data %>%
 # 6. Points data
 pts <- map_chr(pts_data, ~ attributes(.)$points)
 
-
 # 7. Build tibble
 tbl_elements <- tibble(id = seq_along(img),
                        trans_id = trans_id,
@@ -79,27 +85,38 @@ line_txt <- txt_data %>%
   map(flatten_chr) %>%
   map(str_squish)
 
-# 2. Line numbers
+# 2. Remove lines with no text data
+
+# Create list of logical vectors where lines have no data
+no_line_txt <- map(line_txt, ~ . == "")
+
+# For loop to subset
+for (i in seq_along(line_txt)) {
+  line_txt[[i]] <- line_txt[[i]][!no_line_txt[[i]]]
+}
+
+# 3. Line numbers
 line_nr <- map(line_txt, seq_along)
 
 
-# Build line tibble
-tbl_lines <- tibble(trans_id = trans_id,
+# 4. Build line tibble
+tbl_lines <- tibble(id = seq_along(img),
+                    trans_id = trans_id,
                     img = img,
                     type = type,
                     line_nr = line_nr,
                     data = line_txt,
                     pts = pts) %>%
   unnest(c(data, line_nr)) %>%
-  rowid_to_column("id")
+  rowid_to_column("line_id")
 
 
 # Nest data
 tbl_lines %>%
-  nest(data = c(id, line_nr, data))
+  nest(data = c(line_id, line_nr, data))
 
 # Unnest with
 tbl_lines %>%
   nest(data = c(id, line_nr, data)) %>%
   unnest(data) %>%
-  select(id, trans_id, img, type, line_nr, data, pts)
+  select(line_id, id, trans_id, img, type, line_nr, data, pts)
