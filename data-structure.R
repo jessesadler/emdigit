@@ -203,7 +203,9 @@ non_pb <- names(y) != "pb"
 y <- y[non_pb]
 
 # Or, remove all for which type is null
-no_type <- purrr::map(y, ~ attributes(.)$type) %>% map_lgl(., is.null)
+no_type <- y %>%
+  purrr::map(~ attributes(.)$type) %>%
+  map_lgl(., is.null)
 
 y <- y[!no_type]
 
