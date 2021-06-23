@@ -22,10 +22,38 @@ no_type <- txt_data %>%
 
 txt_data <- txt_data[!no_type]
 
+
+# Items that have no text data --------------------------------------------
+
+# Which items have a Transkribus id but no text data
+
+# Length 0 = id but no text data
+# Length 1 = id and line id but no text
+which(map_int(txt_data, length) == 0 | map_int(txt_data, length) == 1)
+
+no_text <- map_int(txt_data, length) == 0 | map_int(txt_data, length) == 1
+
+# Number of items no text data
+sum(no_text)
+
+# Remove items with no text data
+
+txt_data <- txt_data[!no_text]
+
 # Types of data -----------------------------------------------------------
 
 type <- map_chr(txt_data, ~ attributes(.)$type)
 
+# Which elements are missing type data
+which(type == "")
+sum(type == "")
+
+missing_type <- type == ""
+
+# See text of data with missing type
+map(txt_data, flatten_chr)[missing_type] %>%
+  map(str_flatten) %>%
+  map(str_squish)
 
 # Line text data ----------------------------------------------------------
 
