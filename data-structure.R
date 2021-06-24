@@ -33,9 +33,25 @@ str(data_list[[1]][[2]][[1]], max.level = 1)
 # First element of each list is empty list with page id
 data_list[[1]][[2]][[1]][[1]]
 
-pts_data <- data_list[[1]][[2]]
+pts_page <- data_list[[1]][[2]]
 
-attributes(pts_data[[1]][[5]])
+# Length of each element is the number of lines/zones
+length(pts_page[[1]][[5]])
+
+# Each zone/line has its own id (suffix of l1) and set of points data
+pts_page[[1]][[5]][[1]]
+
+# Flatten page data and remove page id elements to get list of length 1628
+# This is same length as txt_data when scan ids are removed
+pts_data <- pts_page %>%
+  flatten() %>%
+  compact()
+
+
+# Access attributes -------------------------------------------------------
+
+# The important info is in the attributes of each element
+attributes(pts_page[[1]][[5]])
 # Attributes
 # 1. $names: (zone) Number of zones or lines
 # 2. $points: Bounding box of points
@@ -43,30 +59,33 @@ attributes(pts_data[[1]][[5]])
 # 4. $id
 # 5. $subtype
 
-# Length of each element is the number of lines/zones
-length(pts_data[[1]][[5]])
+# Transkribus id
+trans_id <- map_chr(pts_data, ~ attributes(.)$id)
 
-# Each zone/line has its own id (suffix of l1) and set of points data
-pts_data[[1]][[5]][[1]]
+# Types of data: Called subtype in points data
+# Missing types are NULL, so need to be converted to empty character
+# This data is actually cleaner than comes from the text data
 
-# Flatten page data and remove page id elements to get list of length 1628
-pts_data_flat <- pts_data %>%
-  flatten() %>%
-  compact()
+subtype <- map(pts_data, ~ attributes(.)$subtype)
+subtype[map_lgl(subtype, is.null)] <- "" # Deal with missing types
+subtype <- flatten_chr(subtype)
+
+pts <- map_chr(pts_data, ~ attributes(.)$points)
+
 
 # Work with first page to build tibble
 
 # pg1 data and remove empty $graphic list
-pg1 <- compact(pts_data[[1]])
+pg1 <- compact(pts_page[[1]])
 
-ids <- map_chr(pg1, ~ attributes(.)$id)
+id <- map_chr(pg1, ~ attributes(.)$id)
 
-types <- map_chr(pg1, ~ attributes(.)$subtype)
+type <- map_chr(pg1, ~ attributes(.)$subtype)
 
 pts <- map_chr(pg1, ~ attributes(.)$points)
 
-tbl <- tibble(id = ids,
-              type = types,
+tbl <- tibble(id = id,
+              type = type,
               pts = pts)
 
 tbl_tidy <- tbl %>%
@@ -91,10 +110,10 @@ ggplot(tbl_sf) +
 
 # Which pages have problems identifying subtypes
 
-subtype_list <- vector("list", length(pts_data))
+subtype_list <- vector("list", length(pts_page))
 
-for (i in seq_along(pts_data)) {
-  subtype_list[[i]] <- map(pts_data[[i]], ~ attributes(.)$subtype)
+for (i in seq_along(pts_page)) {
+  subtype_list[[i]] <- map(pts_page[[i]], ~ attributes(.)$subtype)
   subtype_list[[i]] <- subtype_list[[i]][-1]
 }
 

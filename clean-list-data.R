@@ -37,7 +37,6 @@ no_text <- map_int(txt_data, length) == 0 | map_int(txt_data, length) == 1
 sum(no_text)
 
 # Remove items with no text data
-
 txt_data <- txt_data[!no_text]
 
 
@@ -267,3 +266,35 @@ which(map_dbl(txt_data, ~ length(.) %% 2) == 1)
 
 map_dbl(line_txt[not_equal], length)
 map_dbl(line_id[not_equal], length)
+
+
+# Points data -------------------------------------------------------------
+
+# Points data: Each element in list is one page of the scan
+pts_page <- data_list[[1]][[2]]
+
+# Flatten page data and remove page id elements
+pts_data <- pts_page %>%
+  flatten() %>%
+  compact() %>%
+  set_names(NULL)
+
+# Remove items with no text data
+pts_data <- pts_data[!no_text]
+
+# Transkribus id
+trans_id <- map_chr(pts_data, ~ attributes(.)$id)
+
+# This is equal to above way to get transkribus ids
+all.equal(map_chr(pts_data, ~ attributes(.)$id),
+          map_chr(txt_data, ~ attributes(.)$facs) %>%
+            str_remove("#"))
+
+# Types of data: Called subtype in points data
+# Missing types are NULL, so need to be converted to empty character
+subtype <- map(pts_data, ~ attributes(.)$subtype)
+subtype[map_lgl(subtype, is.null)] <- "" # Deal with missing types
+subtype <- flatten_chr(subtype)
+
+# Points data
+pts <- map_chr(pts_data, ~ attributes(.)$points)
