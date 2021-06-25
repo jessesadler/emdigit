@@ -181,3 +181,34 @@ centroid_placement %>%
   bind_rows(filter(centroid_placement, row_id %in% (probs))) %>%
   arrange(row_id)
 
+
+# Average position of catch-words -----------------------------------------
+
+# Average position for catch-words
+catch_words <- centroids %>%
+  filter(type == "catch-word") %>%
+  group_by(type) %>%
+  summarise() %>%
+  st_centroid() %>%
+  st_geometry()
+
+# Distance from average
+catch_dist <- st_distance(filter(centroids, type == "catch-word"), catch_words) %>%
+  as.numeric()
+
+# Potential outliers
+boxplot.stats(catch_dist)$out
+
+outliers <- which(catch_dist %in% boxplot.stats(catch_dist)$out)
+
+centroids %>%
+  filter(type == "catch-word") %>%
+  slice(outliers) %>%
+  ggplot() +
+  geom_sf() +
+  geom_sf(data = catch_words, color = "red")
+
+centroids %>%
+  filter(type == "catch-word") %>%
+  slice(outliers) %>%
+  left_join(select(tbl_elements, id, data, img), by = "id")
