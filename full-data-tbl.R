@@ -1,10 +1,9 @@
-## Full data tibble ##
+## Full data tibbles ##
 
 # Script to build a tibble from raw xml data: Each row is an element
 
 library(tidyverse)
 library(xml2)
-
 
 # Data --------------------------------------------------------------------
 
@@ -48,8 +47,10 @@ img <- cumsum(no_type)[!no_type][!no_text]
 trans_id <- purrr::map_chr(txt_data, ~ attributes(.)$facs) %>%
   str_remove("#") # Remove "#" at beginning of each id
 
-# 3. Types of data
-type <- purrr::map_chr(txt_data, ~ attributes(.)$type)
+# 3. Types of data: More accurate data seems to come from points data
+type <- map(pts_data, ~ attributes(.)$subtype)
+type[map_lgl(type, is.null)] <- "" # Deal with missing types
+type <- flatten_chr(type)
 
 # 4. Number of lines for each element
 lines <- txt_data %>%
