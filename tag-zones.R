@@ -1,49 +1,31 @@
 ## Tag zones function ##
 
 library(tidyverse)
-library(xml2)
 library(sf)
-library(ggrepel)
 
-data_list <- read_xml("data-raw/1623__Codogno__Compendio_TR_and_Lines.xml") %>%
-  xml2::as_list()
+# tbl: elements tbl from full-data-tbl
+# scan: Image number
 
-pts_data <- data_list[[1]][[2]]
+zones_plot <- function(tbl, scan) {
 
-zones_plot <- function(x, page) {
-  # subset page number
-  x <- compact(x[[page]])
-
-  # Build tibble
-  ids <- map_chr(x, ~ attributes(.)$id)
-  pts <- map_chr(x, ~ attributes(.)$points)
-  # Subtypes not always identified
-  types <- map(x, ~ attributes(.)$subtype)
-  types[map_lgl(types, is.null)] <- NA
-  types <- flatten_chr(types)
-
-  tbl <- tibble(id = ids,
-                type = types,
-                pts = pts)
-
-  tbl_tidy <- tbl %>%
-    separate_rows(pts, sep = " ") %>%
-    separate(pts, c("x", "y"), convert = TRUE) %>%
-    mutate(y = -y)
-
-  # Convert to sf to make polygons
-  tbl_sf <- tbl_tidy %>%
+  tbl %>%
+    dplyr::filter(img == scan) %>%
+    # Separate pts data
+    tidyr::separate_rows(pts, sep = " ") %>%
+    tidyr::separate(pts, c("x", "y"), sep = ",", convert = TRUE) %>%
+    dplyr::mutate(y = -y) %>% # Reverse y for page orientation
+    # Convert to sf and create polygons
     sf::st_as_sf(coords = c("x", "y")) %>%
-    group_by(id) %>%
-    summarise() %>%
+    dplyr::group_by(id, type) %>%
+    dplyr::summarise(.groups = "drop") %>%
     sf::st_convex_hull() %>%
-    left_join(select(tbl, id, type), by = "id")
-
-  # Plot
-  ggplot(tbl_sf) +
-    geom_sf(aes(color = type, fill = type), alpha = 0.4) +
-    geom_text_repel(aes(label = id, geometry = geometry),
-                             stat = "sf_coordinates") +
-    theme_void()
+    # Plot
+    ggplot2::ggplot() +
+    ggplot2::geom_sf(aes(color = type, fill = type), alpha = 0.4) +
+    ggrepel::geom_text_repel(aes(label = id, geometry = geometry),
+                    stat = "sf_coordinates") +
+    ggplot2::theme_void()
 
 }
+
+
