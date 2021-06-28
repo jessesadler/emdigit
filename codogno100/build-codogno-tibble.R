@@ -2,12 +2,16 @@
 
 library(tidyverse)
 library(xml2)
+library(here)
 
 # Build full data and route headings data for Codogno
 
 # Import data -------------------------------------------------------------
 
-data_xml <- read_xml("data-raw/1623__Codogno__Compendio_TR_and_Lines.xml")
+data_xml <- read_xml(
+  here::here("data-raw", "1623__Codogno__Compendio_TR_and_Lines.xml")
+  )
+
 data_list <- xml2::as_list(data_xml)
 txt_data <- data_list[[1]][[3]][[1]][[1]]
 
@@ -96,11 +100,11 @@ tbl <- tibble(type = names(txt_data),
   rowid_to_column("id")
 
 # Save full data
-# tbl %>%
-#   mutate(data = map(data, str_flatten)) %>%
-#   unnest(data) %>%
-#   mutate(data = str_squish(data)) %>%
-#   write_csv("data/full-data.csv")
+tbl %>%
+  mutate(data = map(data, str_flatten)) %>%
+  unnest(data) %>%
+  mutate(data = str_squish(data)) %>%
+  write_csv(here("codogno100", "data-codogno100", "full-data.csv"))
 
 # Route headings tbl ------------------------------------------------------
 
@@ -116,7 +120,8 @@ tbl_routes <- tbl %>%
 unique(word(tbl_routes$data, 1))
 
 # Save route data
-# write_csv(tbl_routes, "data/route-heading.csv")
+write_csv(tbl_routes,
+          here("codogno100", "data-codogno100", "route-heading.csv"))
 
 # Distances tbl -----------------------------------------------------------
 
