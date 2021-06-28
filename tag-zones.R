@@ -4,6 +4,12 @@ library(tidyverse)
 library(sf)
 source(here::here("tag-zones-functions.R"))
 
+tbl_elements <- read_csv(
+  here::here("data", "codogno100-elements.csv")
+)
+
+# Plots -------------------------------------------------------------------
+
 # Plot zones of one page
 
 zones_plot(tbl_elements, 70)

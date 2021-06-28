@@ -1,15 +1,16 @@
-## Full data tibbles ##
+## Build full data tibbles ##
 
-# Script to build a tibble from raw xml data: Each row is an element
+# Script to build elements and lines tibbles from raw xml data
 
 library(tidyverse)
 library(xml2)
 
 # Data --------------------------------------------------------------------
 
-data_list <- read_xml("data-raw/1623__Codogno__Compendio_TR_and_Lines.xml") %>%
+data_list <- read_xml(
+  here::here("data-raw", "1623__Codogno__Compendio_TR_and_Lines.xml")
+) %>%
   xml2::as_list()
-
 
 # Text data
 txt_data <- data_list[[1]][[3]][[1]][[1]] %>%
@@ -121,3 +122,9 @@ tbl_lines %>%
   nest(data = c(id, line_nr, data)) %>%
   unnest(data) %>%
   select(line_id, id, trans_id, img, type, line_nr, data, pts)
+
+
+# Write data --------------------------------------------------------------
+
+write_csv(tbl_elements, here::here("data", "codogno100-elements.csv"))
+write_csv(tbl_lines, here::here("data", "codogno100-lines.csv"))
