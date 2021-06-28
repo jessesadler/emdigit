@@ -5,7 +5,9 @@ library(xml2)
 
 # Import data -------------------------------------------------------------
 
-data_list <- read_xml("data-raw/1623__Codogno__Compendio_TR_and_Lines.xml") %>%
+data_list <- read_xml(
+  here::here("data-raw", "1623__Codogno__Compendio_TR_and_Lines.xml")
+) %>%
   xml2::as_list()
 
 # Look at the structure of the list ---------------------------------------

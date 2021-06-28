@@ -7,8 +7,11 @@ library(xml2)
 
 # Import data -------------------------------------------------------------
 
-data_list <- read_xml("data-raw/1623__Codogno__Compendio_TR_and_Lines.xml") %>%
+data_list <- read_xml(
+  here::here("data-raw", "1623__Codogno__Compendio_TR_and_Lines.xml")
+) %>%
   xml2::as_list()
+
 txt_data <- data_list[[1]][[3]][[1]][[1]] %>%
   set_names(NULL) # Remove names on lists: They are not necessary
 
