@@ -188,3 +188,9 @@ centroids %>%
   filter(type == "catch-word") %>%
   slice(outliers) %>%
   left_join(select(tbl_elements, id, data, img), by = "id")
+
+# Remove outliers to find bounding box
+centroids %>%
+  filter(type == "catch-word") %>%
+  slice(-outliers) %>%
+  st_bbox()
