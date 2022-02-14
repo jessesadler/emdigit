@@ -10,11 +10,13 @@ fdc <- read_csv(
 fd <- read_csv(
   here("codogno100", "data-codogno100", "full-data.csv"))
 
+# When are there two consecutive areas with the same type?
 fd %>%
   filter(type == "sum-distance") %>%
   mutate(diff = id - lag(id)) %>%
   filter(diff == 1)
 
+# Function to find duplicate types
 duplicate_types <- function(df, which_type) {
   df %>%
     filter(type == which_type) %>%

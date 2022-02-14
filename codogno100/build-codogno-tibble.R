@@ -4,7 +4,9 @@ library(tidyverse)
 library(xml2)
 library(here)
 
-# Build full data and route headings data for Codogno
+# Build full data and route headings data for Codogno from raw data.
+# This script is specific to the issues of the Codogno data.
+# It deals with some of the problems in the data in a manual way.
 
 # Import data -------------------------------------------------------------
 
@@ -68,11 +70,13 @@ unknown_type_names <- c("route-heading", "locations", "locations", "catch-word",
 type_names[unknown_type_vct] <- unknown_type_names
 
 names(txt_data) <- type_names
-# Check
+# Check: Should == 1
 sum(names(txt_data) == "")
 
 
 # Build tibble ------------------------------------------------------------
+
+# Create full-data.csv from txt_data
 
 # Route headings
 route_headings_pos <- names(txt_data) == "route-heading"
@@ -117,6 +121,10 @@ tbl_routes <- tbl %>%
          data = str_remove_all(data, "¬ "),
          data = str_remove_all(data, "- "))
 
+# Number of routes
+routes_total <- nrow(tbl_routes)
+
+# First words for the Route headings
 unique(word(tbl_routes$data, 1))
 
 # Save route data
@@ -133,11 +141,15 @@ tbl_distances <- tbl %>%
          distance = str_replace_all(distance, "I", "1"),
          distance = str_replace_all(distance, "i", "1"),
          distance = str_replace_all(distance, "[^0-9]", ""),
-         distance = as.numeric(distance))
+         distance = as.integer(distance))
 
+# Look at distance data
 str_sort(unique(tbl_distances$data))
-filter(tbl_distances, is.na(distance))
+# Which distances do not have a numeric value
+tbl_distances %>%
+  filter(is.na(distance))
 
+# Distance and locations per route
 tbl_distances_sum <- tbl_distances %>%
   filter(!is.na(distance)) %>%
   group_by(route) %>%
@@ -145,7 +157,7 @@ tbl_distances_sum <- tbl_distances %>%
             nr_of_locs = n())
 
 # Which routes do not have distances
-which(1:max(cumsum(route_headings_pos)) %in% tbl_distances_sum$route == FALSE)
+which(seq(routes_total) %in% tbl_distances_sum$route == FALSE)
 
 
 # Sum distance tbl --------------------------------------------------------
@@ -153,19 +165,26 @@ which(1:max(cumsum(route_headings_pos)) %in% tbl_distances_sum$route == FALSE)
 tbl_sum_distance <- tbl %>%
   filter(type == "sum-distance") %>%
   unnest(data) %>%
-  mutate(first = word(data, 1)) %>%
-  count(word)
+  # split data in form of p.9
+  mutate(data = str_replace(data, "p\\.", "p\\. "),
+         distance = word(data, 2),
+         distance = str_remove(distance, "\\D"), # remove non-digits
+         distance = as.integer(distance))
 
+# Look at the data
 str_sort(unique(tbl_sum_distance$data))
 
+tbl_dist_per_route <- tbl_sum_distance %>%
+  count(route, wt = distance)
+
 # Which routes are missing sum-distance
-num_of_routes <- 1:max(cumsum(route_headings_pos))
-sum_distance <- num_of_routes %in% unique(tbl_sum_distance$route)
-num_of_routes[!sum_distance]
+sum_distance <- seq(routes_total) %in% unique(tbl_sum_distance$route)
+seq(routes_total)[!sum_distance]
 
 
 # Locations ---------------------------------------------------------------
 
+# Different ways to try to deal with location data
 
 # First words of location data
 tbl %>%

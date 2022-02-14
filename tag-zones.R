@@ -1,5 +1,7 @@
 ## Tag zones ##
 
+# Find problems by looking at tag zones
+
 library(tidyverse)
 library(sf)
 source(here::here("tag-zones-functions.R"))
@@ -121,7 +123,7 @@ centroid_placement <- centroids_xy %>%
 
 
 # Find problems, then get context of problems
-centroid_placement %>%
+probs <- centroid_placement %>%
   filter(diff > 2)
 
 # If there are two ids per column, the earlier one is the issue
