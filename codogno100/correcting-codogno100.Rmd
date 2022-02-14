@@ -1,0 +1,239 @@
+---
+title: "Correcting Codogno Itinerary"
+author: "Jesse Sadler"
+date: "6/30/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This document shows how to go from element and line data frames of the raw data that are produced by the `build-tbl.R` script to clean, or at least cleaner, data. It is meant to show some of the problems that come up in the data and some possible solutions to minimize manual corrections.
+
+Load packages and import the data
+```{r load-packages, message = FALSE}
+library(tidyverse)
+library(sf)
+library(patchwork)
+library(here)
+source(here("tag-zones-functions.R"))
+
+tbl_elements <- read_csv(here("data", "codogno100-elements.csv"))
+tbl_lines <- read_csv(here("data", "codogno100-lines.csv"))
+```
+
+## Finding problems
+There are a number of issues in the raw data. These include regions that do not have type data, duplicated images, regions that encompass what should be two different regions, ids that are out of order, among others.
+
+### 1. Regions without type data
+
+```{r}
+unnamed_types <- tbl_elements %>% 
+  filter(is.na(type))
+```
+
+We can find the route headings by seeing if the data begins with words most associated with route headings. Most route headings begin with "Poste da", but there are also a couple that begin with "Altro".  
+
+```{r}
+tbl_elements %>% 
+  filter(type == "route-heading") %>% 
+  mutate(start = word(data, 1, 2)) %>% 
+  count(start, sort = TRUE)
+```
+
+We can find distances with a similar method. Almost all distances begin with "p.", so instead of finding the beginning words, we want the first two characters.
+
+```{r unnamed-distances}
+tbl_elements %>% 
+    filter(type == "distances") %>% 
+    mutate(start = str_trunc(data, 2, "right", "")) %>% 
+    count(start, sort = TRUE)
+```
+
+We can find catch words by looking at the bounding box of the centroids of the catch words that are known with the outliers removed. This is currently shown in tag-zones.R. We can then find the centroids that are within this bounding box, which are all catch words. This uses the `sf_polygons()` function from tag-zones-functions.R to create spatial polygons from the coordinates data in the `pts` column.
+
+```{r}
+catch_bbox <- st_bbox(c(xmin = 1327, ymin = -2388, xmax = 1731, ymax = -2133)) %>% 
+  st_as_sfc()
+
+
+is_catch <- unnamed_types %>% 
+  sf_polygons() %>% 
+  st_centroid() %>% 
+  st_within(catch_bbox, sparse = FALSE) %>% 
+  as.vector()
+```
+
+The last unnamed type within this data is locations. One way to find this type is to find the data that is still unknown (`NA`) and then see if it is a relatively long string.
+
+We can then put this all together in a single `mutate()` function.
+
+```{r}
+unnamed_types_fixed <- unnamed_types %>% 
+  mutate(type = if_else(str_detect(data, "^Poste da|^Altro"), "route-heading", NA_character_),
+         type = if_else(str_detect(data, "^p."), "distances", type),
+         type = if_else(is_catch, "catch-word", type),
+         type = if_else(is.na(type) & str_length(data) > 20, "locations", type))
+```
+
+This leaves a single unknown type with data "M 2" on image 57.
+
+Now, we need to fix the elements data to reflect these types by replacing the rows that currently do not have a type with the fixed data.
+
+```{r}
+tbl_elements <- tbl_elements %>% 
+  filter(!is.na(type)) %>% 
+  bind_rows(unnamed_types_fixed) %>% 
+  arrange(id)
+```
+
+### 2. Duplicated images
+The Codogno data has a duplicated page, which can be found by looking at the page number data.
+
+```{r}
+# Get page number data
+tbl_pg_nr <- tbl_elements %>% 
+  filter(type == "page-number") %>% 
+  mutate(data = str_remove_all(data, "\\D")) %>% # Remove any non-numerical data
+  select(img, pg = data) # Select necessary info and rename data to pg
+  
+# Find duplicates
+pg_dupes <- tbl_pg_nr %>% 
+  count(pg) %>% 
+  filter(n > 1) %>% 
+  pull(pg)
+```
+
+Unfortunately, this is more difficult than it might seem at first because not all of the pages of the Codogno text are numbered correctly. Therefore, we can not just look for duplicates. We need to look at the data for the images where the page numbers are the same. Here, we look at the third region of each image to compare the data. We add back in the page data from `tbl_pg_nr` above to compare page number, data type, and number of lines. If these are all the same. There is a good chance that the data is duplicated. We do not want to comapare the data variable itself because that adds too much chance that data that duplicated data was OCR'd differently.
+
+```{r}
+# Find images corresponding to page duplicates
+img_dupes <- tbl_pg_nr %>% 
+  filter(pg %in% pg_dupes) %>% 
+  pull(img)
+
+duplicated_img <- tbl_elements %>% 
+  filter(img %in% img_dupes) %>% 
+  group_by(img) %>% 
+  filter(row_number() == 3) %>% # Get the third element of each image to compare
+  ungroup() %>% 
+  left_join(tbl_pg_nr, by = "img") %>% # Add in page data
+  # Is data the same for page number, type, and lines.
+  # This should give good indication that the data is duplicated.
+  add_count(pg, type, lines) %>% 
+  filter(n != 1)
+```
+
+In the case of the Codogno data this process shows that page 157 is a likely duplicate. We can check by manually looking at the data.
+
+```{r}
+duplicated_img$data
+```
+
+This is clearly the same data, and so we can remove one of the duplicate images from our data.
+
+```{r}
+# Remove data from duplicate image
+tbl_elements <- tbl_elements %>% 
+  filter(img != duplicated_img$img[[2]])
+```
+
+Now that we know all of the pages are unique, we can add a page number column. This data is not completely necessary, but can be helpful for consulting the raw data. We have already seen that we cannot count on the "page-number" type. Therefore, it is best to find the first page number and then use the "img" variable.
+
+```{r}
+# Find page number of first image
+first_pg <- tbl_pg_nr %>% 
+  filter(img == 1) %>% 
+  pull(pg) %>% 
+  as.integer() # Cast to numeric
+
+# Add page variable
+tbl_elements %>% 
+  mutate(page = img + first_pg - 1,
+         .after = img)
+```
+
+### 3. Text region extends across columns
+
+A second problem occurs when the Transkribus tag zone extends across the two columns of the data. It is possible to identify this problem by finding zones that extend across a wide area or that have centroids very close to the column borders. Both of these techniques use geographic data and the `sf_polygons` function to find where this problem occurs. Here, we are not worried about the header data, which is above the columns, and the catch words, which are below. Therefore, these can be removed.
+
+The clearest indication of a text region extending across columns is to get the bounding boxes of the tag zones and find those that are very wide and extend over the center column. This is more convoluted than we might want because bounding boxes in `sf` are represented by matrices. However, we can extract the bounding box data, turn it into a data frame, and the attach the data we began with.
+
+```{r}
+tbl_bboxes <- tbl_elements %>%
+  sf_polygons() %>% 
+  st_geometry() %>%
+  map(st_bbox) %>%
+  transpose() %>%
+  as_tibble() %>%
+  unnest(everything()) %>%
+  bind_cols(select(tbl_elements, id, img, type, data))
+```
+
+Now, we want to find the problematic data by concentrating on the relation of `xmin` to `xmax`, or the width of the bounding boxes.
+
+```{r}
+tbl_bboxes %>% 
+  filter(type != "header" & type != "catch-word",
+         xmin < 300 & xmax > 1400)
+```
+
+Another way to check this is to find centroids of tag zones that are close to the column of `x == 1000`. This is less exact and results in one false positive.
+
+```{r}
+
+col_bbox <- st_bbox(c(xmin = 850, ymin = -2415, xmax = 1100, ymax = 0)) %>% 
+  st_as_sfc()
+
+centroid_probs <- tbl_elements %>% 
+  filter(type %in% c("route-heading", "locations")) %>% 
+  sf_polygons() %>% 
+  st_centroid() %>% 
+  st_within(col_bbox, sparse = FALSE) %>% 
+  which()
+
+tbl_elements %>% 
+  filter(type %in% c("route-heading", "locations")) %>% 
+  slice(centroid_probs)
+
+```
+
+We can see that the problems occur on images 21 and 24. We can use the `zones_plot()` function to look at these issues.
+
+```{r}
+zones_plot(tbl_elements, 21) + 
+  theme(legend.position = "none") + 
+  zones_plot(tbl_elements, 24)
+```
+
+Clearly the problems are in ids 233 and 279. So let's look at the data in these, which is most clear by looking at the line data.
+
+```{r}
+tbl_lines %>% 
+  filter(id %in% c(233, 279)) %>% 
+  select(id, line_id, line_nr, data)
+```
+
+We need new ids for the data that should be in the left column. We can see the placement from the zones plot. The right column of 233 should be after 238, and the right column of 279 should be after 289.
+
+```{r}
+tbl_lines %>% 
+  filter(id %in% c(233, 279)) %>% 
+  mutate(id = if_else(line_id %in% c(1486, 1488), 238.1, id),
+         id = if_else(line_id %in% c(1709, 1710), 289.1, id))
+```
+
+Might be best to try to make a new elements tibble from this data (group by and summarise), remove the problematic ones from `tbl_elements` and then `row_bind()` the new data
+
+```{r}
+tbl_elements %>% 
+  filter(id %in% c(233, 279))
+```
+
+
+### 4. ID is out of order
+
+See `tag-zones.R` under Dealing with placement problems.
+
+This is a problem because if the id is out of order, the data might be placed under the wrong route heading or the locations and distances data could get confused.

@@ -13,7 +13,7 @@ zones_plot <- function(tbl, scan) {
     ggplot2::geom_sf(aes(color = type, fill = type), alpha = 0.4) +
     ggrepel::geom_text_repel(aes(label = id, geometry = geometry),
                              stat = "sf_coordinates") +
-    ggplot2::labs(title = paste0("Page ", scan)) +
+    ggplot2::labs(title = paste0("Image ", scan)) +
     ggplot2::theme_void()
 }
 
