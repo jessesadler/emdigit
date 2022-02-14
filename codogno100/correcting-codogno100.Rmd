@@ -11,7 +11,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 This document shows how to go from element and line data frames of the raw data that are produced by the `build-tbl.R` script to clean, or at least cleaner, data. It is meant to show some of the problems that come up in the data and some possible solutions to minimize manual corrections.
 
-Load packages and import the data
+Load packages and import the data created in `build-tbl.R`.
 ```{r load-packages, message = FALSE}
 library(tidyverse)
 library(sf)
@@ -20,8 +20,12 @@ library(here)
 source(here("tag-zones-functions.R"))
 
 tbl_elements <- read_csv(here("data", "codogno100-elements.csv"))
-tbl_lines <- read_csv(here("data", "codogno100-lines.csv"))
+tbl_lines <- read_csv(here("data", "codogno100-lines.csv")) %>% 
+  nest(data = c(line_id, line_nr, data)) %>% 
+  select(id, data)
 ```
+
+The two data frames represent the same data in different formats. `tbl_elements` contains one row for each element or zone. All of the text data is contained in a single string in the "data" variable. `tbl_lines` contains one row for each line of data, making it closer to the raw xml data. We can nest the line data to replicate the structure of `tbl_elements` with one row per zone. We only need the "id" variable and this nested "data" variable, as all other data is the same as `tbl_elements`. This makes it possible to use this line data when it becomes useful without having to replicate changes to `tbl_elements`.
 
 ## Finding problems
 There are a number of issues in the raw data. These include regions that do not have type data, duplicated images, regions that encompass what should be two different regions, ids that are out of order, among others.
@@ -212,23 +216,47 @@ Clearly the problems are in ids 233 and 279. So let's look at the data in these,
 ```{r}
 tbl_lines %>% 
   filter(id %in% c(233, 279)) %>% 
-  select(id, line_id, line_nr, data)
+  unnest(data)
 ```
 
-We need new ids for the data that should be in the left column. We can see the placement from the zones plot. The right column of 233 should be after 238, and the right column of 279 should be after 289.
+We need new ids for the data that should be in the left column. We can see the placement from the zones plot. The right column of 233 should be after 238, and the right column of 279 should be after 289. First, let's make the change in the `tbl_lines` data frame and then make the necessary changes in `tbl_elements` through the `tbl_lines` data.
 
 ```{r}
-tbl_lines %>% 
-  filter(id %in% c(233, 279)) %>% 
+tbl_lines <- tbl_lines %>% 
+  unnest(data) %>% 
   mutate(id = if_else(line_id %in% c(1486, 1488), 238.1, id),
-         id = if_else(line_id %in% c(1709, 1710), 289.1, id))
+         id = if_else(line_id %in% c(1709, 1711), 289.1, id)) %>% 
+  nest(data = c(line_id, line_nr, data))
 ```
 
-Might be best to try to make a new elements tibble from this data (group by and summarise), remove the problematic ones from `tbl_elements` and then `row_bind()` the new data
+Remake the data that should be in `tbl_elements` from `tbl_lines`, remove wrong data from `tbl_elements`, and then add in new, correct data.
 
 ```{r}
-tbl_elements %>% 
+# Isolate the problematic data
+multi_col_probs <- tbl_elements %>%
   filter(id %in% c(233, 279))
+
+# Isolate the data that we want and then convert from lines to element data frame
+multi_col <- tbl_lines %>% 
+  filter(id %in% c(233, 238.1, 279, 289.1)) %>% 
+  # Group by and summarise text data to bring lines into one string
+  unnest(data) %>% 
+  group_by(id) %>% 
+  summarise(data = str_flatten(data)) %>% 
+  # Add back in data that is in tbl_elements
+  add_column(trans_id = rep(multi_col_probs$trans_id, each = 2),
+             img = rep(multi_col_probs$img, each = 2),
+             type = rep(multi_col_probs$type, each = 2),
+             lines = 2,
+             pts = NA)
+
+# Remove bad data and add corrected data
+tbl_elements <- tbl_elements %>% 
+  filter(id != 233, id != 279) %>% 
+  bind_rows(multi_col) %>% 
+  arrange(id) %>% 
+  filter(id %in% c(233, 238.1, 279, 289.1))
+
 ```
 
 
